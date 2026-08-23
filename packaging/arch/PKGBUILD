@@ -1,0 +1,89 @@
+# Local Arch package: stock Arch libfprint + the Goodix 53x5 driver from THIS
+# checkout. Replaces the distro libfprint package (conflicts/provides), the
+# same way the AUR libfprint-goodix53x5 package does.
+#
+#   cd packaging/arch
+#   makepkg -f
+#   sudo pacman -U libfprint-goodix53x5-*.pkg.tar.zst
+#
+# The driver is copied from the working tree, so uncommitted changes are built
+# too. Derived from the official Arch libfprint PKGBUILD; when bumping pkgver,
+# re-check its build options against ours. See UPGRADING.md.
+
+pkgname=libfprint-goodix53x5
+pkgver=1.94.100
+pkgrel=1
+pkgdesc="libfprint with Goodix HTK32 (27c6:5335/5385/5395) driver"
+url="https://github.com/AndyHazz/goodix53x5-libfprint"
+arch=(x86_64)
+license=(LGPL-2.1-or-later)
+depends=(
+  libgcc
+  glib2
+  glibc
+  libgudev
+  libgusb
+  openssl
+  pixman
+  opencv
+)
+makedepends=(
+  git
+  glib2-devel      # glib-mkenums, split out of glib2 on Arch
+  gobject-introspection
+  gtk-doc
+  meson
+  python-cairo
+  python-gobject
+  systemd
+)
+optdepends=('fprintd: fingerprint authentication daemon')
+provides=(libfprint libfprint-2 libfprint-2.so)
+conflicts=(libfprint libfprint-2)
+groups=(fprint)
+options=(!debug)
+
+source=("git+https://gitlab.freedesktop.org/libfprint/libfprint.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+# Repository root, i.e. two levels up from packaging/arch.
+_repo="$(cd "${startdir:-$PWD}/../.." && pwd)"
+_integration_patch="$_repo/meson-integration-$pkgver.patch"
+
+prepare() {
+  if [ ! -f "$_integration_patch" ]; then
+    error "no meson integration patch for libfprint $pkgver"
+    plain "The patch is version-specific; rebase it and regenerate."
+    plain "See $_repo/packaging/arch/UPGRADING.md"
+    return 1
+  fi
+
+  msg2 "driver: $(git -C "$_repo" describe --always --dirty)"
+
+  cd libfprint
+
+  # Driver + SIGFM matcher sources
+  rm -rf libfprint/drivers/goodix53x5 libfprint/sigfm
+  cp -r "$_repo/drivers/goodix53x5" libfprint/drivers/
+  cp -r "$_repo/sigfm" libfprint/
+
+  # Register the driver, build SIGFM against OpenCV, and move the three PIDs
+  # out of libfprint's unsupported-device hwdb list.
+  patch -p1 < "$_integration_patch"
+}
+
+build() {
+  local meson_options=(
+    # 'all' matches the official package: it also builds the virtual drivers
+    # that fprintd's integration tests use.
+    -D drivers=all
+    -D installed-tests=false
+  )
+
+  arch-meson libfprint build "${meson_options[@]}"
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}
