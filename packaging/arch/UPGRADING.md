@@ -148,6 +148,54 @@ fprintd-list "$USER"     # must show "Goodix HTK32 Fingerprint Sensor"
 fprintd-verify
 ```
 
+## Omarchy PAM integration
+
+Fingerprint auth for sudo, polkit and the lock screen was set up on
+2026-08-23 with the stock wizard, `omarchy setup security fingerprint`. It
+configures `/etc/pam.d/sudo`, `/etc/pam.d/polkit-1` and
+`/etc/pam.d/omarchy-lock-fingerprint` (the file the Quickshell lock reads),
+each with `pam_fprintd.so` as `sufficient` behind a clamshell gate, and the
+password stack still there as the fallback. SDDM login is deliberately not
+included.
+
+Two ways that wizard interacts with this package, neither of them obvious:
+
+- **Its package step is inert here only because of `provides`.** The wizard
+  runs `omarchy-pkg-add libfprint fprintd usbutils`, whose missing-check is
+  `pacman -Q <pkg>` — that resolves `libfprint` through our
+  `provides=(libfprint ...)` to `libfprint-goodix53x5`, so nothing is
+  installed. Drop that provide, or rename the package, and the wizard would
+  run `pacman -S libfprint`, hit the conflict, and (with `--noconfirm`
+  answering N) abort. It cannot silently replace the driver, but it would stop
+  working. The wizard also special-cases `libfprint-git` by pre-removing it;
+  it knows nothing about this package.
+- **`omarchy remove security fingerprint` removes fprintd, not this package.**
+  It calls `omarchy-pkg-drop fprintd libfprint libfprint-git`, which matches
+  exact names from `pacman -Qq`, so `libfprint-goodix53x5` is not matched. The
+  `pacman -Rns fprintd` will not cascade into it either, because it is
+  explicitly installed rather than a dependency. Recovering from an accidental
+  run is just `sudo pacman -S fprintd` — the dependency resolves through
+  `provides`.
+
+Re-running the wizard is safe: it greps for `pam_fprintd.so` and for the
+clamshell gate before inserting either, and only creates `/etc/pam.d/polkit-1`
+when that file does not exist.
+
+### Local deviation from stock Omarchy
+
+`/etc/pam.d/polkit-1` is **not** what the wizard wrote. Stock Omarchy
+authenticates polkit with `pam_unix.so` directly, which leaves GUI
+authentication prompts with no `pam_faillock` lockout. It now ends in
+`include system-auth` instead, matching the distro default and giving those
+prompts the same 10-attempt / 120-second lockout as sudo and login. The
+fingerprint lines are unchanged.
+
+The stock file is kept at `/etc/pam.d/polkit-1.omarchy-stock.bak`. To revert,
+`sudo cp` it back — use sudo, not pkexec, since pkexec authenticates through
+the very file being repaired. `omarchy remove security fingerprint` still
+cleans this version up correctly: it only deletes the `pam_fprintd.so` and
+`omarchy-hw-laptop-closed` lines, leaving a valid stack behind.
+
 ## Known landmines
 
 - **`glib-mkenums` not found.** Arch split it out of `glib2`; install
