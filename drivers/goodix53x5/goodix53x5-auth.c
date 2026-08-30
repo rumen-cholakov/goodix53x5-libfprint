@@ -189,7 +189,10 @@ goodix_verify_ssm_handler (FpiSsm   *ssm,
         probe_info = goodix_match_extract (self->captured_image);
         keypoints = goodix_match_keypoints_count (probe_info);
 
-        if (keypoints < GOODIX_MIN_CAPTURE_KEYPOINTS)
+        fp_dbg ("verify: keypoints %d (min %d)",
+                keypoints, GOODIX_MIN_VERIFY_KEYPOINTS);
+
+        if (keypoints < GOODIX_MIN_VERIFY_KEYPOINTS)
           {
             if (action == FPI_DEVICE_ACTION_IDENTIFY)
               {

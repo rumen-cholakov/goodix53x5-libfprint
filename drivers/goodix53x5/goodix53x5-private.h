@@ -50,8 +50,25 @@
  */
 #define GOODIX_SIGFM_BEST_MIN 150  /* minimum best score from any single sample */
 
-/* Captures below this feature count are effectively blank/failed touches. */
-#define GOODIX_MIN_CAPTURE_KEYPOINTS 20
+/* Keypoint quality gates, split for enroll vs verify.
+ *
+ * A single lenient gate for both paths lets enrollment bank weak or
+ * near-identical low-feature captures; the resulting gallery can then score
+ * zero against every subsequent verify ("dead-weight enrollment"). Enrollment
+ * happens once and can afford to demand a good press, so it gets the strict
+ * gate. Verify runs at every sudo/login prompt and only needs to discard
+ * blank or garbage frames -- rejecting a light-but-usable touch there just
+ * burns a retry that the matcher could have won.
+ *
+ * Ported from brendanjerwin's tuning/split-keypoint-thresholds. The 100 value
+ * was measured on a Dell Precision 5540 where good presses yielded 90-189
+ * keypoints, on the pre-TX-off preprocessing pipeline. This tree runs TX-off
+ * p3 preprocessing plus mutual SIGFM matching, which may shift the keypoint
+ * distribution, so treat 100 as a starting point: both paths log their actual
+ * counts via fp_dbg, so calibrate from journal data before trusting it.
+ */
+#define GOODIX_MIN_ENROLL_KEYPOINTS 100
+#define GOODIX_MIN_VERIFY_KEYPOINTS 30
 
 /* Raw12 frames hard-clip at ADC full scale wherever the finger is not in
  * contact, so clipped pixels carry no finger signal. The TX-off subtraction
