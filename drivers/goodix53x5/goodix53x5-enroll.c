@@ -113,7 +113,10 @@ goodix_enroll_ssm_handler (FpiSsm   *ssm,
         info = goodix_match_extract (self->captured_image);
         keypoints = goodix_match_keypoints_count (info);
 
-        if (keypoints < GOODIX_MIN_CAPTURE_KEYPOINTS)
+        fp_dbg ("enroll: stage %d keypoints %d (min %d)",
+                self->enroll_stage, keypoints, GOODIX_MIN_ENROLL_KEYPOINTS);
+
+        if (keypoints < GOODIX_MIN_ENROLL_KEYPOINTS)
           {
             goodix_match_free_info (info);
             g_clear_pointer (&self->captured_image, g_free);
